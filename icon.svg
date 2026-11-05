@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="appGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.15" />
+    </filter>
+  </defs>
+  
+  <!-- Rounded Background -->
+  <rect width="120" height="120" rx="28" fill="url(#appGrad)" filter="url(#shadow)" />
+  
+  <!-- Main Box / Package Isometric -->
+  <!-- Top Face -->
+  <polygon points="60,24 94,40 60,56 26,40" fill="#ffffff" opacity="0.95" />
+  
+  <!-- Left Face -->
+  <polygon points="26,44 57,59 57,88 26,73" fill="#e2e8f0" />
+  
+  <!-- Right Face -->
+  <polygon points="63,59 94,44 94,73 63,88" fill="#cbd5e1" />
+  
+  <!-- Decorative Tape / Checkmark Indicator -->
+  <circle cx="88" cy="30" r="7" fill="#34d399" />
+  <polyline points="85,30 87,33 92,27" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
+
