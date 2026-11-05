@@ -265,7 +265,11 @@
 
       <!-- Inventory Grid -->
       <div id="inventoryGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <!-- Render cards dynamically -->
+        <!-- Default Loading State -->
+        <div class="col-span-full text-center py-16 text-slate-400">
+          <i class="fa-solid fa-spinner fa-spin text-3xl text-emerald-600 mb-3"></i>
+          <p class="text-sm font-medium">กำลังโหลดข้อมูลพัสดุจากระบบ...</p>
+        </div>
       </div>
     </section>
 
@@ -576,13 +580,34 @@
       }
 
       await checkApiConfig();
+      const cleanUrl = API_URL.trim().replace(/\/+$/, "");
       const queryParams = new URLSearchParams({ action: action, ...params });
-      const url = `${API_URL}?${queryParams.toString()}`;
+      const targetUrl = `${cleanUrl}?${queryParams.toString()}`;
       
-      const res = await fetch(url);
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-      return json;
+      try {
+        const res = await fetch(targetUrl, {
+          method: "GET",
+          mode: "cors"
+        });
+        const text = await res.text();
+        let json;
+        try {
+          json = JSON.parse(text);
+        } catch (parseErr) {
+          if (text.includes("<!DOCTYPE") || text.includes("<html") || text.includes("Google Apps Script")) {
+            throw new Error("Google Apps Script ส่งข้อมูลกลับมาเป็น HTML! กรุณาตรวจสอบว่าได้คัดลอกไฟล์ Code.gs ล่าสุดไปวางใน Apps Script แล้วกด Deploy เป็น New Version หรือยัง");
+          }
+          throw new Error("ข้อมูลตอบกลับผิดรูปแบบ: " + parseErr.message);
+        }
+
+        if (json && json.error) throw new Error(json.error);
+        return json;
+      } catch (err) {
+        if (err.message && err.message.toLowerCase().includes("failed to fetch")) {
+          throw new Error("เชื่อมต่อ Google Apps Script ไม่สำเร็จ (CORS / Failed to fetch): กรุณาตรวจสอบว่าตอน Deploy ได้ตั้งค่า 'Who has access (ผู้มีสิทธิ์เข้าถึง)' เป็น 'Anyone (ทุกคน)' แล้วหรือยัง");
+        }
+        throw err;
+      }
     }
 
     // Universal API POST
@@ -602,16 +627,30 @@
       }
 
       await checkApiConfig();
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8"
-        },
-        body: JSON.stringify({ action: action, data: data })
-      });
+      const cleanUrl = API_URL.trim().replace(/\/+$/, "");
+      try {
+        const res = await fetch(cleanUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/plain;charset=utf-8"
+          },
+          body: JSON.stringify({ action: action, data: data })
+        });
 
-      const json = await res.json();
-      return json;
+        const text = await res.text();
+        let json;
+        try {
+          json = JSON.parse(text);
+        } catch (parseErr) {
+          throw new Error("ไม่สามารถแปลงข้อมูลผลลัพธ์: " + parseErr.message);
+        }
+        return json;
+      } catch (err) {
+        if (err.message && err.message.toLowerCase().includes("failed to fetch")) {
+          throw new Error("ส่งข้อมูลไม่สำเร็จ กรุณาตรวจสอบการตั้งค่า Deploy (Anyone)");
+        }
+        throw err;
+      }
     }
 
     // State Store
@@ -661,16 +700,38 @@
 
     // Load Inventory
     async function loadInventory(showNotification) {
+      const grid = document.getElementById('inventoryGrid');
       try {
+        if (grid && (!inventoryData || inventoryData.length === 0)) {
+          grid.innerHTML = `
+            <div class="col-span-full text-center py-16 text-slate-400">
+              <i class="fa-solid fa-spinner fa-spin text-3xl text-emerald-600 mb-3"></i>
+              <p class="text-sm font-medium">กำลังโหลดข้อมูลพัสดุจากระบบ...</p>
+            </div>
+          `;
+        }
+
         const data = await apiGet('getInventory');
-        inventoryData = data;
-        populateItemSelect(data);
-        renderInventoryGrid(data);
-        renderLowStockAlert(data);
+        inventoryData = data || [];
+        populateItemSelect(inventoryData);
+        renderInventoryGrid(inventoryData);
+        renderLowStockAlert(inventoryData);
         if (showNotification) {
           Swal.fire({ icon: 'success', title: 'อัปเดตข้อมูลพัสดุแล้ว', timer: 1200, showConfirmButton: false });
         }
       } catch (err) {
+        if (grid) {
+          grid.innerHTML = `
+            <div class="col-span-full bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-700">
+              <i class="fa-solid fa-triangle-exclamation text-3xl mb-2 text-red-500"></i>
+              <h4 class="font-bold text-base mb-1">โหลดข้อมูลพัสดุไม่สำเร็จ</h4>
+              <p class="text-xs text-red-600 mb-4 max-w-lg mx-auto font-mono">${err.message}</p>
+              <button onclick="loadInventory(true)" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold hover:bg-emerald-700 shadow">
+                <i class="fa-solid fa-rotate mr-1"></i> ลองใหม่อีกครั้ง
+              </button>
+            </div>
+          `;
+        }
         Swal.fire({ icon: 'error', title: 'โหลดข้อมูลล้มเหลว', text: err.message });
       }
     }
@@ -868,11 +929,18 @@
       `).join('');
     }
 
+    // Image Error Handler
+    function handleImageLoadError(img) {
+      img.classList.add('hidden');
+      const fallback = img.parentElement.querySelector('.img-fallback');
+      if (fallback) fallback.classList.remove('hidden');
+    }
+
     // Render Inventory Catalog Grid
     function renderInventoryGrid(items) {
       const grid = document.getElementById('inventoryGrid');
-      if (items.length === 0) {
-        grid.innerHTML = '<div class="col-span-full text-center py-12 text-slate-400">ไม่พบรายการพัสดุ</div>';
+      if (!items || items.length === 0) {
+        grid.innerHTML = '<div class="col-span-full text-center py-12 text-slate-400 font-medium">ไม่พบรายการพัสดุ</div>';
         return;
       }
 
@@ -886,18 +954,19 @@
           statusBadge = '<span class="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">พร้อมเบิก</span>';
         }
 
+        const imgUrl = item.image || '';
+
         return `
           <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition">
             <!-- Image Frame -->
             <div class="relative h-44 bg-slate-100 overflow-hidden flex items-center justify-center">
-              ${item.image ? `
-                <img src="${item.image}" alt="${item.name}" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center text-slate-300\\'><i class=\\'fa-regular fa-image text-4xl mb-1\\'></i><span class=\\'text-[11px] text-slate-400\\'>ไม่มีรูปภาพ</span></div>';" class="w-full h-full object-cover">
-              ` : `
-                <div class="flex flex-col items-center justify-center text-slate-300">
-                  <i class="fa-regular fa-image text-4xl mb-1"></i>
-                  <span class="text-[11px] text-slate-400">ยังไม่มีรูปพัสดุ</span>
-                </div>
-              `}
+              ${imgUrl ? `
+                <img src="${imgUrl}" alt="${item.name}" onerror="handleImageLoadError(this)" class="w-full h-full object-cover">
+              ` : ''}
+              <div class="img-fallback flex flex-col items-center justify-center text-slate-300 ${imgUrl ? 'hidden' : ''}">
+                <i class="fa-regular fa-image text-4xl mb-1"></i>
+                <span class="text-[11px] text-slate-400">ยังไม่มีรูปพัสดุ</span>
+              </div>
               <div class="absolute top-2 left-2 font-mono text-[11px] font-bold bg-black/60 text-white px-2 py-0.5 rounded backdrop-blur-sm">
                 ${item.id}
               </div>
