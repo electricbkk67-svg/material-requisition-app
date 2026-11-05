@@ -1,7 +1,7 @@
 /**
  * ====================================================================
  * ระบบเว็บแอปพลิเคชัน เบิกจ่ายพัสดุ (Material Requisition System)
- * พัฒนาด้วย Google Apps Script (HTML / JavaScript Web App)
+ * Backend REST API สำหรับ Google Apps Script + รองรับ GitHub Pages
  * ====================================================================
  */
 
@@ -12,67 +12,127 @@ const CONFIG = {
   SHEET_TRANSACTIONS: "เบิกจ่าย",
 
   // ID ของโฟลเดอร์ Google Drive สำหรับจัดเก็บรูปภาพ
-  // *** กรุณานำ Folder ID จาก Google Drive มาใส่ในเครื่องหมายคำพูดด้านล่าง ***
   FOLDER_ID_ITEM_IMAGES: "PUT_YOUR_ITEM_IMAGE_FOLDER_ID_HERE", // โฟลเดอร์ "รูปพัสดุ"
   FOLDER_ID_JOB_IMAGES: "PUT_YOUR_JOB_IMAGE_FOLDER_ID_HERE",   // โฟลเดอร์ "รูปงาน"
 };
 
 /**
- * ฟังก์ชันเริ่มต้นสำหรับโหลดหน้า Web App
+ * Handle GET Requests (เรียกข้อมูลพัสดุ, รหัสถัดไป, ประวัติ, ซิงค์รูป)
  */
 function doGet(e) {
-  const template = HtmlService.createTemplateFromFile("Index");
-  return template
-    .evaluate()
-    .setTitle("ระบบเบิกจ่ายพัสดุ")
-    .addMetaTag("viewport", "width=device-width, initial-scale=1")
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  const action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "";
+
+  // ถ้าเปิดจาก Browser ตรงๆ โดยไม่มี action ให้แสดงหน้าเว็บ (กรณีเปิดใน Google Apps Script โดยตรง)
+  if (!action) {
+    try {
+      const template = HtmlService.createTemplateFromFile("index");
+      return template
+        .evaluate()
+        .setTitle("ระบบเบิกจ่ายพัสดุ")
+        .addMetaTag("viewport", "width=device-width, initial-scale=1")
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    } catch (err) {
+      return jsonResponse({ status: "ok", message: "API Backend is running." });
+    }
+  }
+
+  try {
+    let result = null;
+
+    if (action === "getInventory") {
+      result = getInventory();
+    } else if (action === "getNextItemId") {
+      result = getNextItemId();
+    } else if (action === "getHistory") {
+      const limit = Number(e.parameter.limit) || 50;
+      result = getRequisitionHistory(limit);
+    } else if (action === "syncImages") {
+      result = syncDriveImagesToSheet();
+    } else {
+      return jsonResponse({ error: "Invalid action" });
+    }
+
+    return jsonResponse(result);
+  } catch (error) {
+    return jsonResponse({ error: error.message });
+  }
+}
+
+/**
+ * Handle POST Requests (บันทึกเบิกจ่าย, เพิ่มพัสดุใหม่, แก้ไขข้อมูล/รูป)
+ */
+function doPost(e) {
+  try {
+    let payload = {};
+    if (e && e.postData && e.postData.contents) {
+      payload = JSON.parse(e.postData.contents);
+    } else if (e && e.parameter) {
+      payload = e.parameter;
+    }
+
+    const action = payload.action || "";
+    let response = { success: false, message: "Unknown action" };
+
+    if (action === "submitRequisition") {
+      response = submitRequisition(payload.data || payload);
+    } else if (action === "addItem") {
+      response = addNewItem(payload.data || payload);
+    } else if (action === "updateItem") {
+      response = updateItem(payload.data || payload);
+    }
+
+    return jsonResponse(response);
+  } catch (error) {
+    return jsonResponse({ success: false, message: "Server error: " + error.message });
+  }
+}
+
+/**
+ * ส่งคืน JSON ตอบกลับพร้อม Header
+ */
+function jsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
  * ดึงข้อมูลพัสดุทั้งหมด (Inventory)
  */
 function getInventory() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(CONFIG.SHEET_INVENTORY);
-    if (!sheet) throw new Error("ไม่พบชีท: " + CONFIG.SHEET_INVENTORY);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.SHEET_INVENTORY);
+  if (!sheet) throw new Error("ไม่พบชีท: " + CONFIG.SHEET_INVENTORY);
 
-    const values = sheet.getDataRange().getValues();
-    if (values.length <= 1) return [];
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
 
-    const headers = values[0].map(h => String(h).trim());
-    const items = [];
+  const items = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    if (!row[0] && !row[1]) continue;
 
-    for (let i = 1; i < values.length; i++) {
-      const row = values[i];
-      if (!row[0] && !row[1]) continue; // ข้ามแถวว่าง
+    const item = {
+      rowIndex: i + 1,
+      id: String(row[0] || "").trim(),
+      name: String(row[1] || "").trim(),
+      category: String(row[2] || "").trim(),
+      usageType: String(row[3] || "").trim(),
+      details: String(row[4] || "").trim(),
+      image: formatImageUrl(String(row[5] || "").trim()),
+      location: String(row[6] || "").trim(),
+      minStock: Number(row[7]) || 0,
+      received: Number(row[8]) || 0,
+      disbursed: Number(row[9]) || 0,
+      remaining: Number(row[10]) || 0,
+      needMore: Number(row[11]) || 0,
+      unit: String(row[12] || "").trim(),
+      percentRemaining: row[13] !== undefined ? row[13] : 0
+    };
 
-      const item = {
-        rowIndex: i + 1,
-        id: String(row[0] || "").trim(),
-        name: String(row[1] || "").trim(),
-        category: String(row[2] || "").trim(),
-        usageType: String(row[3] || "").trim(),
-        details: String(row[4] || "").trim(),
-        image: formatImageUrl(String(row[5] || "").trim()),
-        location: String(row[6] || "").trim(),
-        minStock: Number(row[7]) || 0,
-        received: Number(row[8]) || 0,
-        disbursed: Number(row[9]) || 0,
-        remaining: Number(row[10]) || 0,
-        needMore: Number(row[11]) || 0,
-        unit: String(row[12] || "").trim(),
-        percentRemaining: row[13] !== undefined ? row[13] : 0
-      };
-
-      items.push(item);
-    }
-
-    return items;
-  } catch (error) {
-    throw new Error("เกิดข้อผิดพลาดในการโหลดข้อมูลพัสดุ: " + error.message);
+    items.push(item);
   }
+
+  return items;
 }
 
 /**
@@ -141,7 +201,7 @@ function addNewItem(data) {
       remaining,
       needMore,
       data.unit || "ชิ้น",
-      percent / 100 // เก็บเป็นเลขทศนิยมสำหรับ Google Sheet % format
+      percent / 100
     ];
 
     sheet.appendRow(newRow);
@@ -192,7 +252,7 @@ function updateItem(data) {
     const needMore = remaining < minStock ? minStock - remaining : 0;
     const percent = minStock > 0 ? (remaining / minStock) * 100 : (remaining > 0 ? 100 : 0);
 
-    // อัปเดตแถว
+    // อัปเดตชีท
     sheet.getRange(targetRow, 2).setValue(data.name || "");
     sheet.getRange(targetRow, 3).setValue(data.category || "");
     sheet.getRange(targetRow, 4).setValue(data.usageType || "เบิกขาด");
@@ -203,7 +263,6 @@ function updateItem(data) {
     sheet.getRange(targetRow, 7).setValue(data.location || "");
     sheet.getRange(targetRow, 8).setValue(minStock);
     sheet.getRange(targetRow, 9).setValue(received);
-    // row 10 (disbursed) คงเดิม
     sheet.getRange(targetRow, 11).setValue(remaining);
     sheet.getRange(targetRow, 12).setValue(needMore);
     sheet.getRange(targetRow, 13).setValue(data.unit || "");
@@ -221,7 +280,7 @@ function updateItem(data) {
 function submitRequisition(data) {
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(15000); // รอ Lock 15 วินาที เพื่อป้องกันคนเบิกพร้อมกันสต็อกคลาดเคลื่อน
+    lock.waitLock(15000);
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheetInv = ss.getSheetByName(CONFIG.SHEET_INVENTORY);
@@ -229,7 +288,6 @@ function submitRequisition(data) {
 
     if (!sheetInv || !sheetReq) throw new Error("ไม่พบชีทพัสดุหรือชีทเบิกจ่าย");
 
-    // 1. ตรวจสอบสต็อกในชีทพัสดุ
     const invValues = sheetInv.getDataRange().getValues();
     let itemRow = -1;
     let currentItem = null;
@@ -267,7 +325,7 @@ function submitRequisition(data) {
       );
     }
 
-    // 2. จัดการอัปโหลดรูปงาน / รูปพัสดุ
+    // รูปงาน
     let jobImageUrl = "";
     if (data.jobImageBase64 && data.jobImageName) {
       jobImageUrl = uploadFileToDrive(
@@ -279,6 +337,7 @@ function submitRequisition(data) {
       );
     }
 
+    // รูปพัสดุขณะเบิก
     let requisitionItemImageUrl = currentItem.image;
     if (data.reqImageBase64 && data.reqImageName) {
       requisitionItemImageUrl = uploadFileToDrive(
@@ -290,45 +349,41 @@ function submitRequisition(data) {
       );
     }
 
-    // 3. รัน ID การเบิกจ่ายอัตโนมัติ
     const reqId = "DISB-" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss");
     const timestampStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss");
 
-    // คำนวณสต็อกหลังเบิก
     const newDisbursed = currentItem.disbursed + qtyToDisburse;
     const newRemaining = currentItem.received - newDisbursed;
     const newNeedMore = newRemaining < currentItem.minStock ? currentItem.minStock - newRemaining : 0;
     const newPercent = currentItem.minStock > 0 ? (newRemaining / currentItem.minStock) * 100 : 0;
 
-    // 4. บันทึกลงชีท "เบิกจ่าย" (คอลัมน์ A ถึง S)
     const newReqRow = [
-      data.jobId || "",                  // A: งาน ID
-      reqId,                             // B: เบิกจ่าย ID
-      data.itemId,                       // C: พัสดุ ID
-      data.locationId || "",             // D: สถานที่ ID
-      data.date || Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd"), // E: วันที่
-      data.jobName || "",                // F: งานวันนี้
-      data.location || currentItem.location, // G: สถานที่
-      jobImageUrl,                       // H: รูปงาน
-      currentItem.name,                  // I: รายการพัสดุ
-      requisitionItemImageUrl,           // J: รูปพัสดุ
-      data.requester || "",              // K: ผู้เบิก
-      data.status || "เบิกจ่ายสำเร็จ",       // L: สถานะการเบิก
-      timestampStr,                      // M: เวลาที่ทำรายการ (Timestamp)
-      currentItem.minStock,              // N: ควรมี
-      currentItem.received,              // O: รับเข้า
-      qtyToDisburse,                     // P: เบิกออก
-      newRemaining,                      // Q: คงเหลือ
-      newNeedMore,                       // R: ควรเพิ่ม
-      data.workResult || ""              // S: ผลการปฏิบัติงาน
+      data.jobId || "",
+      reqId,
+      data.itemId,
+      data.locationId || "",
+      data.date || Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd"),
+      data.jobName || "",
+      data.location || currentItem.location,
+      jobImageUrl,
+      currentItem.name,
+      requisitionItemImageUrl,
+      data.requester || "",
+      data.status || "เบิกจ่ายสำเร็จ",
+      timestampStr,
+      currentItem.minStock,
+      currentItem.received,
+      qtyToDisburse,
+      newRemaining,
+      newNeedMore,
+      data.workResult || ""
     ];
 
     sheetReq.appendRow(newReqRow);
 
-    // 5. ตัดสต็อกในชีท "พัสดุ"
-    sheetInv.getRange(itemRow, 10).setValue(newDisbursed); // H: เบิกออก
-    sheetInv.getRange(itemRow, 11).setValue(newRemaining); // I: คงเหลือ
-    sheetInv.getRange(itemRow, 12).setValue(newNeedMore);  // J: ควรเพิ่ม
+    sheetInv.getRange(itemRow, 10).setValue(newDisbursed);
+    sheetInv.getRange(itemRow, 11).setValue(newRemaining);
+    sheetInv.getRange(itemRow, 12).setValue(newNeedMore);
     sheetInv.getRange(itemRow, 14).setValue(newPercent / 100);
 
     return {
@@ -345,59 +400,53 @@ function submitRequisition(data) {
 }
 
 /**
- * ดึงประวัติการเบิกจ่าย (Transactions History)
+ * ดึงประวัติการเบิกจ่าย
  */
 function getRequisitionHistory(limit) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(CONFIG.SHEET_TRANSACTIONS);
-    if (!sheet) return [];
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.SHEET_TRANSACTIONS);
+  if (!sheet) return [];
 
-    const values = sheet.getDataRange().getValues();
-    if (values.length <= 1) return [];
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
 
-    const maxItems = limit || 50;
-    const list = [];
+  const maxItems = limit || 50;
+  const list = [];
 
-    // วนจากล่างขึ้นบนเพื่อเอาแถวล่าสุดก่อน
-    for (let i = values.length - 1; i >= 1; i--) {
-      const row = values[i];
-      if (!row[1]) continue;
+  for (let i = values.length - 1; i >= 1; i--) {
+    const row = values[i];
+    if (!row[1]) continue;
 
-      list.push({
-        jobId: row[0],
-        disbId: row[1],
-        itemId: row[2],
-        date: formatDateDisplay(row[4]),
-        jobName: row[5],
-        location: row[6],
-        jobImage: formatImageUrl(row[7]),
-        itemName: row[8],
-        itemImage: formatImageUrl(row[9]),
-        requester: row[10],
-        status: row[11],
-        timestamp: row[12],
-        quantity: row[15],
-        workResult: row[18]
-      });
+    list.push({
+      jobId: row[0],
+      disbId: row[1],
+      itemId: row[2],
+      date: formatDateDisplay(row[4]),
+      jobName: row[5],
+      location: row[6],
+      jobImage: formatImageUrl(row[7]),
+      itemName: row[8],
+      itemImage: formatImageUrl(row[9]),
+      requester: row[10],
+      status: row[11],
+      timestamp: row[12],
+      quantity: row[15],
+      workResult: row[18]
+    });
 
-      if (list.length >= maxItems) break;
-    }
-
-    return list;
-  } catch (error) {
-    throw new Error("เกิดข้อผิดพลาดในการโหลดประวัติ: " + error.message);
+    if (list.length >= maxItems) break;
   }
+
+  return list;
 }
 
 /**
- * ฟังก์ชันผู้ช่วย: อัปโหลดไฟล์ภาพ Base64 ไปยัง Google Drive
- * ตั้งชื่อไฟล์ตามแบบแผน: [รหัส].รูป.[HHmmss].jpg
+ * อัปโหลดไฟล์ภาพ Base64 ไปยัง Google Drive
  */
 function uploadFileToDrive(base64Data, originalName, folderId, idPrefix, typeLabel) {
   try {
     if (!folderId || folderId.includes("PUT_YOUR")) {
-      return ""; // ยังไม่ได้ตั้งค่า Folder ID
+      return "";
     }
 
     const folder = DriveApp.getFolderById(folderId);
@@ -405,7 +454,6 @@ function uploadFileToDrive(base64Data, originalName, folderId, idPrefix, typeLab
     const contentType = splitData[0].match(/:(.*?);/)[1];
     const decodedBytes = Utilities.base64Decode(splitData[1]);
 
-    // สร้างชื่อไฟล์ตามแพทเทิร์น: พัสดุ-0001.รูป.121323.jpg
     const timeStr = Utilities.formatDate(new Date(), "GMT+7", "HHmmss");
     let ext = "jpg";
     if (originalName && originalName.lastIndexOf(".") !== -1) {
@@ -416,10 +464,7 @@ function uploadFileToDrive(base64Data, originalName, folderId, idPrefix, typeLab
     const blob = Utilities.newBlob(decodedBytes, contentType, fileName);
     const file = folder.createFile(blob);
 
-    // เปิดสิทธิ์ให้อ่านรูปได้
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-    // ส่งคืน Direct View Link ของ Google Drive
     return file.getUrl();
   } catch (err) {
     Logger.log("Error uploading to Drive: " + err.message);
@@ -428,17 +473,13 @@ function uploadFileToDrive(base64Data, originalName, folderId, idPrefix, typeLab
 }
 
 /**
- * ปรับ URL ของ Google Drive ให้แสดงผลเป็นภาพ <img> ได้อย่างเสถียร 100%
- * รองรับทั้งรูปแบบ drive.google.com และ lh3.googleusercontent.com
+ * ปรับ URL Google Drive ให้โหลดตรงเสถียร 100%
  */
 function formatImageUrl(url) {
   if (!url) return "";
-  // ดึง File ID จาก Google Drive URL
   const match = url.match(/[-\w]{25,}/);
   if (match) {
-    const fileId = match[0];
-    // ใช้ lh3.googleusercontent.com หรือ thumbnail API ซึ่งโหลดเร็วและไม่โดนเบราว์เซอร์บล็อก
-    return "https://lh3.googleusercontent.com/d/" + fileId;
+    return "https://lh3.googleusercontent.com/d/" + match[0];
   }
   return url;
 }
@@ -452,16 +493,17 @@ function formatDateDisplay(d) {
 }
 
 /**
- * [ฟังก์ชันพิเศษ] ซิงค์รูปภาพเดิมในโฟลเดอร์ Drive "รูปพัสดุ" เข้าสู่ชีทพัสดุอัตโนมัติ!
- * กวาดหาไฟล์ภาพที่มีชื่อตรงกับรหัสพัสดุ เช่น "พัสดุ-0001.รูป.*" แล้วนำ URL มาหยอดใส่ชีทให้ทันที
+ * ซิงค์รูปภาพเดิม 95+ รูป
  */
 function syncDriveImagesToSheet() {
   try {
     if (!CONFIG.FOLDER_ID_ITEM_IMAGES || CONFIG.FOLDER_ID_ITEM_IMAGES.includes("PUT_YOUR")) {
-      return "กรุณาระบุ CONFIG.FOLDER_ID_ITEM_IMAGES ให้ถูกต้องก่อนรัน";
+      return "กรุณาระบุ CONFIG.FOLDER_ID_ITEM_IMAGES ก่อนรัน";
     }
 
     const folder = DriveApp.getFolderById(CONFIG.FOLDER_ID_ITEM_IMAGES);
+    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
     const files = folder.getFiles();
     const imageMap = {};
 
@@ -469,7 +511,6 @@ function syncDriveImagesToSheet() {
       const file = files.next();
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       const name = file.getName();
-      // ค้นหารหัสพัสดุจากชื่อไฟล์ เช่น พัสดุ-0001
       const match = name.match(/(พัสดุ-\d+)/);
       if (match) {
         const itemId = match[1];
@@ -485,7 +526,6 @@ function syncDriveImagesToSheet() {
     for (let i = 1; i < values.length; i++) {
       const itemId = String(values[i][0]).trim();
       if (imageMap[itemId]) {
-        // คอลัมน์ที่ 6 คือ คอลัมน์ F (รูป)
         sheet.getRange(i + 1, 6).setValue(imageMap[itemId]);
         updatedCount++;
       }
@@ -496,4 +536,3 @@ function syncDriveImagesToSheet() {
     return "เกิดข้อผิดพลาดในการซิงค์รูป: " + err.message;
   }
 }
-
