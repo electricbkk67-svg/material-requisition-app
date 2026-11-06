@@ -266,6 +266,10 @@
             <option value="LOW">เหลือน้อย (<= 20%)</option>
             <option value="FULL">เต็มเป้าหมาย (100%)</option>
           </select>
+          <button onclick="recalculateAndSync()" title="คำนวณและอัปเดตสต็อกทั้งหมดใหม่จากชีทเบิกจ่าย" class="px-3 py-2 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition">
+            <i class="fa-solid fa-calculator"></i>
+            <span class="hidden sm:inline">คำนวณสต็อกใหม่</span>
+          </button>
           <button onclick="loadInventory(true)" title="รีเฟรชข้อมูล" class="p-2 border border-slate-200 rounded-xl hover:bg-slate-100 text-slate-600">
             <i class="fa-solid fa-rotate"></i>
           </button>
@@ -743,6 +747,38 @@
           `;
         }
         Swal.fire({ icon: 'error', title: 'โหลดข้อมูลล้มเหลว', text: err.message });
+      }
+    }
+
+    // คำนวณและอัปเดตสต็อกทั้งหมดใหม่จากชีทเบิกจ่าย
+    async function recalculateAndSync() {
+      Swal.fire({
+        title: 'กำลังคำนวณสต็อกใหม่...',
+        text: 'ระบบกำลังรวมยอดเบิกจากชีท "เบิกจ่าย" และอัปเดตลงชีท "พัสดุ"',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      try {
+        const data = await apiGet('recalculate');
+        inventoryData = (Array.isArray(data) ? data : (data.items || []));
+        populateItemSelect(inventoryData);
+        renderInventoryGrid(inventoryData);
+        renderLowStockAlert(inventoryData);
+        Swal.fire({
+          icon: 'success',
+          title: 'คำนวณและอัปเดตสต็อกเรียบร้อย!',
+          text: `อัปเดตสต็อกพัสดุ ${inventoryData.length} รายการแล้ว`,
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } catch (err) {
+        Swal.fire({
+          icon: 'error',
+          title: 'เกิดข้อผิดพลาดในการคำนวณ',
+          text: err.message
+        });
       }
     }
 
