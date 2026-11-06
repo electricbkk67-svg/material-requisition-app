@@ -13,6 +13,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="เบิกจ่ายพัสดุ">
 
+  <!-- Progressive Web App (PWA) Manifest -->
+  <link rel="manifest" href="manifest.json">
+
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- FontAwesome 6 -->
@@ -64,6 +67,11 @@
         </button>
         <button onclick="switchTab('tab-history')" id="btn-tab-history" class="nav-btn px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-600 text-emerald-100">
           <i class="fa-solid fa-clock-rotate-left mr-1"></i> ประวัติ
+        </button>
+        <!-- PWA Install Button -->
+        <button onclick="installPWA()" id="btnInstallApp" title="ติดตั้งแอปพลิเคชันลงเครื่อง / หน้าจอโฮม" class="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow flex items-center space-x-1.5 transition">
+          <i class="fa-solid fa-download"></i>
+          <span class="hidden sm:inline">ติดตั้งแอป</span>
         </button>
         <button onclick="openApiConfigModal()" title="ตั้งค่าเชื่อมต่อ Google Apps Script API" class="px-2 py-1.5 text-emerald-200 hover:text-white rounded-lg hover:bg-emerald-600 text-sm transition">
           <i class="fa-solid fa-gear"></i>
@@ -1344,6 +1352,87 @@
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
+    }
+
+    // ==========================================
+    // Progressive Web App (PWA) Install Logic
+    // ==========================================
+    let deferredPrompt = null;
+
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('PWA ServiceWorker Active:', reg.scope))
+          .catch(err => console.log('ServiceWorker Registration Error:', err));
+      });
+    }
+
+    // Capture Install Prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.getElementById('btnInstallApp');
+      if (btn) {
+        btn.classList.add('animate-bounce');
+        setTimeout(() => btn.classList.remove('animate-bounce'), 3000);
+      }
+    });
+
+    window.addEventListener('appinstalled', () => {
+      deferredPrompt = null;
+      Swal.fire({
+        icon: 'success',
+        title: 'ติดตั้งแอปสำเร็จ!',
+        text: 'คุณสามารถเปิดใช้งานระบบเบิกจ่ายพัสดุผ่านไอคอนบนหน้าจอหลักได้แล้ว',
+        timer: 2000,
+        showConfirmButton: false
+      });
+    });
+
+    // Install Action
+    async function installPWA() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          console.log('User installed the PWA app');
+        }
+        deferredPrompt = null;
+      } else {
+        // Fallback info for iOS / Desktop / Manual install
+        Swal.fire({
+          title: 'ติดตั้งแอปพลิเคชันลงเครื่อง',
+          html: `
+            <div class="text-left text-xs space-y-3 p-1">
+              <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-start space-x-2.5">
+                <i class="fa-brands fa-android text-emerald-600 text-lg mt-0.5"></i>
+                <div>
+                  <h5 class="font-bold text-slate-800">สำหรับ Android (Chrome)</h5>
+                  <p class="text-slate-600">กดที่จุด 3 จุด <i class="fa-solid fa-ellipsis-vertical"></i> มุมขวาบน แล้วเลือก <b>"ติดตั้งแอป"</b> หรือ <b>"เพิ่มลงในหน้าจอหลัก"</b></p>
+                </div>
+              </div>
+              <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-start space-x-2.5">
+                <i class="fa-brands fa-apple text-slate-700 text-lg mt-0.5"></i>
+                <div>
+                  <h5 class="font-bold text-slate-800">สำหรับ iPhone / iPad (Safari)</h5>
+                  <p class="text-slate-600">กดปุ่มแชร์ <i class="fa-solid fa-arrow-up-from-bracket"></i> ด้านล่าง แล้วเลือก <b>"เพิ่มไปยังหน้าจอโฮม (Add to Home Screen)"</b></p>
+                </div>
+              </div>
+              <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-start space-x-2.5">
+                <i class="fa-solid fa-desktop text-blue-600 text-lg mt-0.5"></i>
+                <div>
+                  <h5 class="font-bold text-slate-800">สำหรับคอมพิวเตอร์ (Chrome / Edge)</h5>
+                  <p class="text-slate-600">กดไอคอนรูปหน้าจอ <i class="fa-solid fa-download"></i> ในแถบพิมพ์ที่อยู่เว็บด้านบนขวา เพื่อติดตั้ง</p>
+                </div>
+              </div>
+            </div>
+          `,
+          icon: 'info',
+          confirmButtonColor: '#059669',
+          confirmButtonText: 'เข้าใจแล้ว'
+        });
+      }
     }
   </script>
 </body>
