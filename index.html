@@ -231,7 +231,7 @@
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
             <h3 class="font-bold text-slate-800 text-sm flex items-center">
-              <i class="fa-solid fa-bell text-amber-500 mr-2"></i> แจ้งเตือนพัสดุใกล้หมด
+              <i class="fa-solid fa-cart-plus text-amber-500 mr-2"></i> รายการที่ควรจัดซื้อเพิ่ม (ต่ำกว่าเป้า)
             </h3>
             <span id="lowStockCountBadge" class="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-bold">0</span>
           </div>
@@ -261,9 +261,10 @@
           </select>
           <select id="invStatusFilter" onchange="filterInventory()" class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-medium">
             <option value="ALL">ทุกสถานะ</option>
-            <option value="LOW">ใกล้หมด</option>
-            <option value="OUT">หมดสต็อก</option>
-            <option value="NORMAL">ปกติ</option>
+            <option value="NEED_MORE">ควรซื้อเพิ่ม (ต่ำกว่าเป้า)</option>
+            <option value="OUT">หมดสต็อก (0%)</option>
+            <option value="LOW">เหลือน้อย (<= 20%)</option>
+            <option value="FULL">เต็มเป้าหมาย (100%)</option>
           </select>
           <button onclick="loadInventory(true)" title="รีเฟรชข้อมูล" class="p-2 border border-slate-200 rounded-xl hover:bg-slate-100 text-slate-600">
             <i class="fa-solid fa-rotate"></i>
@@ -332,8 +333,9 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">จำนวนที่ควรมี (เกณฑ์ขั้นต่ำ)</label>
-              <input type="number" id="addItemMinStock" min="0" value="5" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <label class="block text-sm font-medium text-slate-700 mb-1">จำนวนที่ควรมีในคลัง (เป้าหมายประจำปี/รอบ)</label>
+              <input type="number" id="addItemMinStock" min="0" value="10" placeholder="ระบุจำนวนเป้าหมาย" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+              <span class="text-[11px] text-slate-400">เป้าหมายสต็อก เพื่อคำนวณยอดที่ต้องซื้อเพิ่ม</span>
             </div>
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-1">จำนวนรับเข้าเริ่มต้น</label>
@@ -431,7 +433,7 @@
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-medium text-slate-700 mb-1">ควรมี (เกณฑ์ขั้นต่ำ)</label>
+              <label class="block text-xs font-medium text-slate-700 mb-1">ควรมีในคลัง (เป้าหมายประจำปี/รอบ)</label>
               <input type="number" id="editItemMinStock" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm">
             </div>
             <div>
@@ -911,27 +913,31 @@
       }
     }
 
-    // Render Low Stock Alert Widget
+    // Render Items to Buy / Low Stock Alert Widget
     function renderLowStockAlert(items) {
-      const lowItems = items.filter(i => i.remaining <= i.minStock);
-      document.getElementById('lowStockCountBadge').textContent = lowItems.length;
+      // รายการที่ต้องจัดซื้อเพิ่ม คือ รายการที่ยอดคงเหลือยังไม่ถึงยอดควรมี (needMore > 0)
+      const needBuyItems = items.filter(i => i.needMore > 0);
+      document.getElementById('lowStockCountBadge').textContent = needBuyItems.length;
 
       const container = document.getElementById('lowStockList');
-      if (lowItems.length === 0) {
-        container.innerHTML = '<p class="text-xs text-emerald-600 text-center py-6">พัสดุทุกรายการมีสต็อกเพียงพอ</p>';
+      if (needBuyItems.length === 0) {
+        container.innerHTML = '<p class="text-xs text-emerald-600 text-center py-6"><i class="fa-solid fa-circle-check text-lg mb-1 block"></i>พัสดุทุกรายการมีครบตามเป้าหมายประจำปี</p>';
         return;
       }
 
-      container.innerHTML = lowItems.map(item => `
-        <div class="flex items-center space-x-3 p-2.5 rounded-xl border ${item.remaining === 0 ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}">
-          <img src="${item.image || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 24 24\' fill=\'%23cbd5e1\'><path d=\'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5-7-3 3.72L9 13l-3 4h12l-4-5z\'/></svg>'}" class="w-10 h-10 object-cover rounded-lg bg-white border border-slate-200">
+      const placeholderSvg = "data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'60\\' height=\\'60\\' viewBox=\\'0 0 24 24\\' fill=\\'%23cbd5e1\\'><path d=\\'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5-7-3 3.72L9 13l-3 4h12l-4-5z\\'/></svg>";
+
+      container.innerHTML = needBuyItems.map(item => `
+        <div class="flex items-center space-x-3 p-2.5 rounded-xl border ${item.remaining === 0 ? 'bg-red-50 border-red-200' : 'bg-amber-50/60 border-amber-200'}">
+          <img src="${item.image || placeholderSvg}" onerror="this.src='${placeholderSvg}'" class="w-10 h-10 object-cover rounded-lg bg-white border border-slate-200 flex-shrink-0">
           <div class="flex-1 min-w-0">
             <h5 class="text-xs font-bold text-slate-800 truncate">${item.name}</h5>
-            <p class="text-[11px] text-slate-500">${item.id} | ขั้นต่ำ: ${item.minStock}</p>
+            <p class="text-[11px] text-slate-500">${item.id} | เป้าหมาย: ${item.shouldHave} ${item.unit}</p>
+            <span class="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">ต้องซื้อเพิ่ม: +${item.needMore} ${item.unit}</span>
           </div>
-          <div class="text-right">
-            <span class="text-xs font-bold ${item.remaining === 0 ? 'text-red-700' : 'text-amber-700'}">${item.remaining} ${item.unit}</span>
-            <p class="text-[10px] text-slate-400">คงเหลือ</p>
+          <div class="text-right flex-shrink-0">
+            <span class="text-xs font-bold ${item.remaining === 0 ? 'text-red-700' : 'text-slate-700'}">${item.remaining} ${item.unit}</span>
+            <p class="text-[10px] font-semibold text-emerald-700">เหลือ ${item.percentRemaining}%</p>
           </div>
         </div>
       `).join('');
@@ -953,13 +959,17 @@
       }
 
       grid.innerHTML = items.map(item => {
+        const pct = item.percentRemaining !== undefined ? item.percentRemaining : (item.shouldHave > 0 ? Math.round((item.remaining / item.shouldHave) * 100) : 100);
+
         let statusBadge = '';
         if (item.remaining <= 0) {
-          statusBadge = '<span class="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full">หมดสต็อก</span>';
-        } else if (item.remaining <= item.minStock) {
-          statusBadge = '<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">ใกล้หมด</span>';
+          statusBadge = '<span class="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full">หมดสต็อก (0%)</span>';
+        } else if (pct <= 20) {
+          statusBadge = `<span class="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full">เหลือน้อย (${pct}%)</span>`;
+        } else if (item.needMore > 0) {
+          statusBadge = `<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">ต้องซื้อเพิ่ม ${item.needMore} (${pct}%)</span>`;
         } else {
-          statusBadge = '<span class="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">พร้อมเบิก</span>';
+          statusBadge = `<span class="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">เต็มเป้าหมาย (${pct}%)</span>`;
         }
 
         const imgUrl = item.image || '';
@@ -992,9 +1002,26 @@
               </div>
 
               <div class="mt-4 pt-3 border-t border-slate-100">
-                <div class="flex items-center justify-between text-xs mb-3">
-                  <span class="text-slate-500">คงเหลือในคลัง:</span>
-                  <span class="font-bold text-slate-800 text-sm">${item.remaining} <span class="text-xs text-slate-500 font-normal">${item.unit}</span></span>
+                <!-- ข้อมูลคงเหลือ เทียบกับ เป้าหมายควรมี -->
+                <div class="space-y-1.5 text-xs mb-3">
+                  <div class="flex items-center justify-between text-slate-500">
+                    <span>คงเหลือ / ควรมี (เป้าหมาย):</span>
+                    <span class="font-bold text-slate-800">${item.remaining} / ${item.shouldHave} <span class="font-normal text-slate-500">${item.unit}</span></span>
+                  </div>
+
+                  <!-- Progress Bar -->
+                  <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                    <div class="h-1.5 rounded-full ${pct <= 20 ? 'bg-red-500' : (pct < 100 ? 'bg-amber-500' : 'bg-emerald-500')}" style="width: ${Math.min(pct, 100)}%"></div>
+                  </div>
+
+                  <div class="flex items-center justify-between pt-0.5">
+                    <span class="text-[11px] text-slate-500">% คงเหลือ: <b class="${pct <= 20 ? 'text-red-600' : (pct < 100 ? 'text-amber-700' : 'text-emerald-700')}">${pct}%</b></span>
+                    ${item.needMore > 0 ? `
+                      <span class="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">ซื้อเพิ่ม: +${item.needMore} ${item.unit}</span>
+                    ` : `
+                      <span class="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">สต็อกครบเป้า</span>
+                    `}
+                  </div>
                 </div>
 
                 <div class="flex space-x-2">
@@ -1021,10 +1048,14 @@
       const filtered = inventoryData.filter(item => {
         const matchQ = !q || item.name.toLowerCase().includes(q) || item.id.toLowerCase().includes(q) || item.category.toLowerCase().includes(q);
         const matchCat = cat === 'ALL' || item.category === cat;
+        
         let matchStat = true;
-        if (stat === 'LOW') matchStat = item.remaining > 0 && item.remaining <= item.minStock;
+        const pct = item.percentRemaining !== undefined ? item.percentRemaining : (item.shouldHave > 0 ? Math.round((item.remaining / item.shouldHave) * 100) : 100);
+
+        if (stat === 'NEED_MORE') matchStat = item.needMore > 0;
         if (stat === 'OUT') matchStat = item.remaining <= 0;
-        if (stat === 'NORMAL') matchStat = item.remaining > item.minStock;
+        if (stat === 'LOW') matchStat = item.remaining > 0 && pct <= 20;
+        if (stat === 'FULL') matchStat = item.remaining >= item.shouldHave && item.shouldHave > 0;
 
         return matchQ && matchCat && matchStat;
       });
@@ -1173,6 +1204,7 @@
         unit: document.getElementById('addItemUnit').value.trim(),
         location: document.getElementById('addItemLocation').value.trim(),
         minStock: document.getElementById('addItemMinStock').value,
+        shouldHave: document.getElementById('addItemMinStock').value,
         received: document.getElementById('addItemReceived').value,
         details: document.getElementById('addItemDetails').value.trim(),
         imageBase64: imageBase64,
@@ -1207,7 +1239,7 @@
       document.getElementById('editItemUsageType').value = item.usageType || 'เบิกขาด';
       document.getElementById('editItemUnit').value = item.unit || 'ชิ้น';
       document.getElementById('editItemLocation').value = item.location || '';
-      document.getElementById('editItemMinStock').value = item.minStock || 0;
+      document.getElementById('editItemMinStock').value = item.shouldHave !== undefined ? item.shouldHave : (item.minStock || 0);
       document.getElementById('editItemReceived').value = item.received || 0;
       document.getElementById('editItemDetails').value = item.details || '';
       document.getElementById('editItemCurrentImg').value = item.image || '';
@@ -1250,6 +1282,7 @@
         unit: document.getElementById('editItemUnit').value.trim(),
         location: document.getElementById('editItemLocation').value.trim(),
         minStock: document.getElementById('editItemMinStock').value,
+        shouldHave: document.getElementById('editItemMinStock').value,
         received: document.getElementById('editItemReceived').value,
         details: document.getElementById('editItemDetails').value.trim(),
         currentImage: document.getElementById('editItemCurrentImg').value,

@@ -12,8 +12,8 @@ const CONFIG = {
   SHEET_TRANSACTIONS: "เบิกจ่าย",
 
   // ID ของโฟลเดอร์ Google Drive สำหรับจัดเก็บรูปภาพ
-  FOLDER_ID_ITEM_IMAGES: "PUT_YOUR_ITEM_IMAGE_FOLDER_ID_HERE", // โฟลเดอร์ "รูปพัสดุ"
-  FOLDER_ID_JOB_IMAGES: "PUT_YOUR_JOB_IMAGE_FOLDER_ID_HERE",   // โฟลเดอร์ "รูปงาน"
+  FOLDER_ID_ITEM_IMAGES: "1GkMFsEsbajzD0x4FCy-Zak2FkoC0TPyl", // โฟลเดอร์ "รูปพัสดุ"
+  FOLDER_ID_JOB_IMAGES: "1a2sjlmCoevkwnx_d4L32ByHpbKeIj7Ix",   // โฟลเดอร์ "รูปงาน"
 };
 
 /**
@@ -111,6 +111,14 @@ function getInventory() {
     const row = values[i];
     if (!row[0] && !row[1]) continue;
 
+    const shouldHave = Number(row[7]) || 0; // ควรมี (เป้าหมายประจำปี/รอบ เพื่อดูยอดที่ต้องซื้อเพิ่ม)
+    const received = Number(row[8]) || 0;   // รับเข้า
+    const disbursed = Number(row[9]) || 0;  // เบิกออก
+    const remaining = Number(row[10]) || 0; // คงเหลือ
+    const needMore = shouldHave > remaining ? shouldHave - remaining : 0; // ควรเพิ่ม
+    // เปอร์เซ็นต์คงเหลือ: คิดจาก คงเหลือ เทียบกับ ควรมี (เป้าหมาย)
+    const percentRemaining = shouldHave > 0 ? Math.round((remaining / shouldHave) * 100) : (remaining > 0 ? 100 : 0);
+
     const item = {
       rowIndex: i + 1,
       id: String(row[0] || "").trim(),
@@ -120,13 +128,14 @@ function getInventory() {
       details: String(row[4] || "").trim(),
       image: formatImageUrl(String(row[5] || "").trim()),
       location: String(row[6] || "").trim(),
-      minStock: Number(row[7]) || 0,
-      received: Number(row[8]) || 0,
-      disbursed: Number(row[9]) || 0,
-      remaining: Number(row[10]) || 0,
-      needMore: Number(row[11]) || 0,
+      minStock: shouldHave,
+      shouldHave: shouldHave,
+      received: received,
+      disbursed: disbursed,
+      remaining: remaining,
+      needMore: needMore,
       unit: String(row[12] || "").trim(),
-      percentRemaining: row[13] !== undefined ? row[13] : 0
+      percentRemaining: percentRemaining
     };
 
     items.push(item);
@@ -180,12 +189,12 @@ function addNewItem(data) {
       );
     }
 
-    const minStock = Number(data.minStock) || 0;
+    const shouldHave = Number(data.shouldHave || data.minStock) || 0;
     const received = Number(data.received) || 0;
     const disbursed = 0;
     const remaining = received - disbursed;
-    const needMore = remaining < minStock ? minStock - remaining : 0;
-    const percent = minStock > 0 ? (remaining / minStock) * 100 : (remaining > 0 ? 100 : 0);
+    const needMore = shouldHave > remaining ? shouldHave - remaining : 0;
+    const percent = shouldHave > 0 ? (remaining / shouldHave) : 0;
 
     const newRow = [
       data.id || getNextItemId(),
@@ -195,13 +204,13 @@ function addNewItem(data) {
       data.details || "",
       imageUrl,
       data.location || "",
-      minStock,
+      shouldHave,
       received,
       disbursed,
       remaining,
       needMore,
       data.unit || "ชิ้น",
-      percent / 100
+      percent
     ];
 
     sheet.appendRow(newRow);
@@ -246,11 +255,11 @@ function updateItem(data) {
     }
 
     const currentDisbursed = Number(values[targetRow - 1][9]) || 0;
-    const minStock = Number(data.minStock) || 0;
+    const shouldHave = Number(data.shouldHave || data.minStock) || 0;
     const received = Number(data.received) || 0;
     const remaining = received - currentDisbursed;
-    const needMore = remaining < minStock ? minStock - remaining : 0;
-    const percent = minStock > 0 ? (remaining / minStock) * 100 : (remaining > 0 ? 100 : 0);
+    const needMore = shouldHave > remaining ? shouldHave - remaining : 0;
+    const percent = shouldHave > 0 ? (remaining / shouldHave) : 0;
 
     // อัปเดตชีท
     sheet.getRange(targetRow, 2).setValue(data.name || "");
@@ -261,12 +270,12 @@ function updateItem(data) {
       sheet.getRange(targetRow, 6).setValue(imageUrl);
     }
     sheet.getRange(targetRow, 7).setValue(data.location || "");
-    sheet.getRange(targetRow, 8).setValue(minStock);
+    sheet.getRange(targetRow, 8).setValue(shouldHave);
     sheet.getRange(targetRow, 9).setValue(received);
     sheet.getRange(targetRow, 11).setValue(remaining);
     sheet.getRange(targetRow, 12).setValue(needMore);
     sheet.getRange(targetRow, 13).setValue(data.unit || "");
-    sheet.getRange(targetRow, 14).setValue(percent / 100);
+    sheet.getRange(targetRow, 14).setValue(percent);
 
     return { success: true, message: "อัปเดตข้อมูลพัสดุเรียบร้อยแล้ว" };
   } catch (error) {
@@ -354,8 +363,9 @@ function submitRequisition(data) {
 
     const newDisbursed = currentItem.disbursed + qtyToDisburse;
     const newRemaining = currentItem.received - newDisbursed;
-    const newNeedMore = newRemaining < currentItem.minStock ? currentItem.minStock - newRemaining : 0;
-    const newPercent = currentItem.minStock > 0 ? (newRemaining / currentItem.minStock) * 100 : 0;
+    const shouldHave = currentItem.minStock; // ควรมี (เป้าหมาย)
+    const newNeedMore = shouldHave > newRemaining ? shouldHave - newRemaining : 0;
+    const newPercent = shouldHave > 0 ? (newRemaining / shouldHave) : 0;
 
     const newReqRow = [
       data.jobId || "",
@@ -371,7 +381,7 @@ function submitRequisition(data) {
       data.requester || "",
       data.status || "เบิกจ่ายสำเร็จ",
       timestampStr,
-      currentItem.minStock,
+      shouldHave,
       currentItem.received,
       qtyToDisburse,
       newRemaining,
@@ -384,7 +394,7 @@ function submitRequisition(data) {
     sheetInv.getRange(itemRow, 10).setValue(newDisbursed);
     sheetInv.getRange(itemRow, 11).setValue(newRemaining);
     sheetInv.getRange(itemRow, 12).setValue(newNeedMore);
-    sheetInv.getRange(itemRow, 14).setValue(newPercent / 100);
+    sheetInv.getRange(itemRow, 14).setValue(newPercent);
 
     return {
       success: true,
