@@ -463,6 +463,91 @@
       </div>
     </div>
 
+    <!-- =================================================== -->
+    <!-- MODAL: แก้ไขประวัติการเบิกจ่าย (Edit History Modal)   -->
+    <!-- =================================================== -->
+    <div id="modalEditHistory" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full max-h-[90vh] overflow-y-auto custom-scrollbar p-6">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+          <div>
+            <h3 class="font-bold text-slate-800 text-base flex items-center">
+              <i class="fa-solid fa-pen-to-square text-amber-600 mr-2"></i> แก้ไขประวัติการเบิกจ่าย
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">รหัสรายการ: <span id="editHistDisbIdBadge" class="font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded"></span></p>
+          </div>
+          <button onclick="closeEditHistoryModal()" class="text-slate-400 hover:text-slate-600 p-1">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <form id="formEditHistory" onsubmit="handleEditHistorySubmit(event)" class="space-y-4">
+          <input type="hidden" id="editHistDisbId">
+          <input type="hidden" id="editHistPassword">
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">วันที่ปฏิบัติงาน <span class="text-red-500">*</span></label>
+              <input type="date" id="editHistDate" required class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">สถานะการเบิก</label>
+              <select id="editHistStatus" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm bg-slate-50 font-medium">
+                <option value="เบิกจ่ายสำเร็จ">เบิกจ่ายสำเร็จ</option>
+                <option value="ยืมใช้งาน">ยืมใช้งาน</option>
+                <option value="ส่งคืนแล้ว">ส่งคืนแล้ว</option>
+                <option value="ยกเลิกรายการ">ยกเลิกรายการ</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">งานวันนี้ / รายละเอียดงาน</label>
+              <input type="text" id="editHistJobName" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">สถานที่ปฏิบัติงาน</label>
+              <input type="text" id="editHistLocation" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">ผู้ขอเบิก</label>
+              <input type="text" id="editHistRequester" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">จำนวนที่เบิก <span class="text-red-500">*</span></label>
+              <input type="number" id="editHistQuantity" min="1" required class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-bold text-slate-800">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">รายการพัสดุ <span class="text-red-500">*</span></label>
+            <select id="editHistItemId" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-medium">
+              <!-- เติมรายการพัสดุอัตโนมัติ -->
+            </select>
+            <span class="text-[11px] text-amber-600 block mt-1"><i class="fa-solid fa-triangle-exclamation mr-1"></i>ระบบจะคำนวณและปรับยอดสต็อกคงเหลือให้อัตโนมัติ</span>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">ผลการปฏิบัติงาน</label>
+            <textarea id="editHistWorkResult" rows="2" placeholder="บันทึกผลการปฏิบัติงาน..." class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm"></textarea>
+          </div>
+
+          <div class="pt-3 flex space-x-2">
+            <button type="button" onclick="closeEditHistoryModal()" class="w-1/2 py-2 border border-slate-300 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50">
+              ยกเลิก
+            </button>
+            <button type="submit" id="btnEditHistSubmit" class="w-1/2 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold shadow flex items-center justify-center space-x-1">
+              <i class="fa-solid fa-floppy-disk"></i>
+              <span>บันทึกการแก้ไข</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- ========================================== -->
     <!-- TAB 4: ประวัติการเบิกจ่าย (History)        -->
     <!-- ========================================== -->
@@ -492,11 +577,12 @@
                 <th class="py-3 px-3 text-right">จำนวน</th>
                 <th class="py-3 px-3 text-center">รูปงาน</th>
                 <th class="py-3 px-3">สถานะ</th>
+                <th class="py-3 px-3 text-center">จัดการ</th>
               </tr>
             </thead>
             <tbody id="historyTableBody" class="divide-y divide-slate-100 text-slate-700">
               <tr>
-                <td colspan="8" class="text-center py-8 text-slate-400">กำลังโหลดประวัติ...</td>
+                <td colspan="9" class="text-center py-8 text-slate-400">กำลังโหลดประวัติ...</td>
               </tr>
             </tbody>
           </table>
@@ -1340,13 +1426,16 @@
       }
     }
 
+    let historyData = [];
+
     // Load History Table
     async function loadHistory() {
       const tbody = document.getElementById('historyTableBody');
       try {
         const history = await apiGet('getHistory', { limit: 50 });
+        historyData = history || [];
         if (!history || history.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-slate-400">ยังไม่มีประวัติการเบิกจ่าย</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-slate-400">ยังไม่มีประวัติการเบิกจ่าย</td></tr>';
           return;
         }
 
@@ -1366,10 +1455,173 @@
             <td class="py-2.5 px-3">
               <span class="bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded text-[11px]">${h.status || 'สำเร็จ'}</span>
             </td>
+            <td class="py-2.5 px-3 text-center space-x-1 whitespace-nowrap">
+              <button onclick="requestEditHistory('${h.disbId}')" title="แก้ไขรายการนี้ (รหัสผ่าน 1234)" class="px-2 py-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded text-xs font-semibold transition">
+                <i class="fa-solid fa-pen-to-square mr-0.5"></i> แก้ไข
+              </button>
+              <button onclick="requestDeleteHistory('${h.disbId}')" title="ลบรายการนี้ (รหัสผ่าน 1234)" class="px-2 py-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded text-xs font-semibold transition">
+                <i class="fa-solid fa-trash-can mr-0.5"></i> ลบ
+              </button>
+            </td>
           </tr>
         `).join('');
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-red-500">โหลดประวัติล้มเหลว: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-red-500">โหลดประวัติล้มเหลว: ${err.message}</td></tr>`;
+      }
+    }
+
+    // Prompt Password Helper (ตรวจสอบรหัสผ่าน 1234)
+    async function promptAdminPassword(actionTitle) {
+      const { value: password } = await Swal.fire({
+        title: actionTitle || 'ยืนยันรหัสผ่านความปลอดภัย',
+        text: 'กรุณากรอกรหัสผ่านเพื่อดำเนินการ (รหัสผ่านคือ 1234)',
+        input: 'password',
+        inputPlaceholder: 'กรอกรหัสผ่าน 4 หลัก',
+        inputAttributes: {
+          maxlength: '10',
+          autocapitalize: 'off',
+          autocorrect: 'off'
+        },
+        showCancelButton: true,
+        confirmButtonText: 'ยืนยัน',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#059669',
+        cancelButtonColor: '#64748b',
+        inputValidator: (value) => {
+          if (!value) {
+            return 'กรุณากรอกรหัสผ่าน!';
+          }
+          if (value !== '1234') {
+            return 'รหัสผ่านไม่ถูกต้อง! กรุณาลองใหม่อีกครั้ง';
+          }
+        }
+      });
+      return password;
+    }
+
+    // ลบรายการประวัติการเบิกจ่าย
+    async function requestDeleteHistory(disbId) {
+      const record = historyData.find(h => h.disbId === disbId);
+      const password = await promptAdminPassword('ยืนยันรหัสผ่านเพื่อลบข้อมูล');
+      if (!password) return;
+
+      const confirmResult = await Swal.fire({
+        title: 'ยืนยันการลบรายการเบิก?',
+        html: `คุณต้องการลบรายการ <b>${disbId}</b> ใช่หรือไม่?<br><span class="text-xs text-emerald-600 font-semibold">ระบบจะคำนวณคืนยอดคงเหลือเข้าสู่คลังให้อัตโนมัติ</span>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'ยืนยันการลบ',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#64748b'
+      });
+
+      if (!confirmResult.isConfirmed) return;
+
+      Swal.fire({
+        title: 'กำลังลบรายการ...',
+        text: 'กรุณารอสักครู่ ระบบกำลังปรับยอดสต็อกคืน',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      try {
+        const res = await apiPost('deleteHistory', { disbId: disbId, password: password });
+        if (res.success) {
+          Swal.fire({
+            icon: 'success',
+            title: 'ลบสำเร็จ',
+            text: res.message,
+            timer: 2000,
+            showConfirmButton: false
+          });
+          loadHistory();
+          loadInventory();
+        } else {
+          Swal.fire({ icon: 'error', title: 'ลบล้มเหลว', text: res.message });
+        }
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+      }
+    }
+
+    // เปิดหน้าต่างแก้ไขประวัติ
+    async function requestEditHistory(disbId) {
+      const record = historyData.find(h => h.disbId === disbId);
+      if (!record) return;
+
+      const password = await promptAdminPassword('ยืนยันรหัสผ่านเพื่อแก้ไขข้อมูล');
+      if (!password) return;
+
+      document.getElementById('editHistDisbId').value = record.disbId;
+      document.getElementById('editHistDisbIdBadge').textContent = record.disbId;
+      document.getElementById('editHistPassword').value = password;
+      document.getElementById('editHistDate').value = record.rawDate || '';
+      document.getElementById('editHistJobName').value = record.jobName || '';
+      document.getElementById('editHistLocation').value = record.location || '';
+      document.getElementById('editHistRequester').value = record.requester || '';
+      document.getElementById('editHistQuantity').value = record.quantity || 1;
+      document.getElementById('editHistStatus').value = record.status || 'เบิกจ่ายสำเร็จ';
+      document.getElementById('editHistWorkResult').value = record.workResult || '';
+
+      // เติมตัวเลือกรายการพัสดุ
+      const selectItemEl = document.getElementById('editHistItemId');
+      selectItemEl.innerHTML = (inventoryData || []).map(item => `
+        <option value="${item.id}" ${item.id === record.itemId ? 'selected' : ''}>
+          ${item.id} - ${item.name} (คงเหลือปัจจุบัน: ${item.remaining} ${item.unit})
+        </option>
+      `).join('');
+
+      document.getElementById('modalEditHistory').classList.remove('hidden');
+    }
+
+    function closeEditHistoryModal() {
+      document.getElementById('modalEditHistory').classList.add('hidden');
+      document.getElementById('formEditHistory').reset();
+    }
+
+    // ส่งฟอร์มแก้ไขประวัติ
+    async function handleEditHistorySubmit(e) {
+      e.preventDefault();
+
+      Swal.fire({
+        title: 'กำลังบันทึกการแก้ไข...',
+        text: 'ระบบกำลังอัปเดตข้อมูลและคำนวณสต็อกใหม่',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      const payload = {
+        disbId: document.getElementById('editHistDisbId').value,
+        password: document.getElementById('editHistPassword').value,
+        date: document.getElementById('editHistDate').value,
+        jobName: document.getElementById('editHistJobName').value.trim(),
+        location: document.getElementById('editHistLocation').value.trim(),
+        requester: document.getElementById('editHistRequester').value.trim(),
+        itemId: document.getElementById('editHistItemId').value,
+        quantity: Number(document.getElementById('editHistQuantity').value) || 1,
+        status: document.getElementById('editHistStatus').value,
+        workResult: document.getElementById('editHistWorkResult').value.trim()
+      };
+
+      try {
+        const res = await apiPost('updateHistory', payload);
+        if (res.success) {
+          Swal.fire({
+            icon: 'success',
+            title: 'แก้ไขสำเร็จ',
+            text: res.message,
+            timer: 2000,
+            showConfirmButton: false
+          });
+          closeEditHistoryModal();
+          loadHistory();
+          loadInventory();
+        } else {
+          Swal.fire({ icon: 'error', title: 'แก้ไขล้มเหลว', text: res.message });
+        }
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
       }
     }
 
