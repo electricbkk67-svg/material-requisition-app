@@ -565,7 +565,13 @@
           </button>
         </div>
 
-        <div class="overflow-x-auto custom-scrollbar">
+        <!-- Mobile View (Card List แสดงชัดเจนบนหน้าจอมือถือ ไม่ต้องเลื่อนขวา) -->
+        <div id="historyMobileList" class="block md:hidden space-y-3">
+          <p class="text-center py-8 text-slate-400 text-xs">กำลังโหลดประวัติ...</p>
+        </div>
+
+        <!-- Desktop View (ตารางเต็มหน้าจอสำหรับคอมพิวเตอร์ / แท็บเล็ต) -->
+        <div class="hidden md:block overflow-x-auto custom-scrollbar">
           <table class="w-full text-left border-collapse text-xs">
             <thead>
               <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
@@ -1428,45 +1434,102 @@
 
     let historyData = [];
 
-    // Load History Table
+    // Load History Table & Mobile Cards
     async function loadHistory() {
       const tbody = document.getElementById('historyTableBody');
+      const mobileList = document.getElementById('historyMobileList');
       try {
         const history = await apiGet('getHistory', { limit: 50 });
         historyData = history || [];
+
         if (!history || history.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-slate-400">ยังไม่มีประวัติการเบิกจ่าย</td></tr>';
+          if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-slate-400">ยังไม่มีประวัติการเบิกจ่าย</td></tr>';
+          if (mobileList) mobileList.innerHTML = '<p class="text-center py-6 text-slate-400 text-xs">ยังไม่มีประวัติการเบิกจ่าย</p>';
           return;
         }
 
-        tbody.innerHTML = history.map(h => `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="py-2.5 px-3 font-medium">${h.date}</td>
-            <td class="py-2.5 px-3 font-semibold text-slate-800">${h.jobName || '-'}</td>
-            <td class="py-2.5 px-3 text-slate-500">${h.location || '-'}</td>
-            <td class="py-2.5 px-3">${h.requester || '-'}</td>
-            <td class="py-2.5 px-3">
-              <span class="font-mono text-emerald-700">${h.itemId}</span> ${h.itemName}
-            </td>
-            <td class="py-2.5 px-3 text-right font-bold text-slate-800">${h.quantity}</td>
-            <td class="py-2.5 px-3 text-center">
-              ${h.jobImage ? `<a href="${h.jobImage}" target="_blank" class="inline-flex items-center text-emerald-600 hover:text-emerald-800"><i class="fa-regular fa-image text-sm"></i></a>` : '-'}
-            </td>
-            <td class="py-2.5 px-3">
-              <span class="bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded text-[11px]">${h.status || 'สำเร็จ'}</span>
-            </td>
-            <td class="py-2.5 px-3 text-center space-x-1 whitespace-nowrap">
-              <button onclick="requestEditHistory('${h.disbId}')" title="แก้ไขรายการนี้ (รหัสผ่าน 1234)" class="px-2 py-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded text-xs font-semibold transition">
-                <i class="fa-solid fa-pen-to-square mr-0.5"></i> แก้ไข
-              </button>
-              <button onclick="requestDeleteHistory('${h.disbId}')" title="ลบรายการนี้ (รหัสผ่าน 1234)" class="px-2 py-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded text-xs font-semibold transition">
-                <i class="fa-solid fa-trash-can mr-0.5"></i> ลบ
-              </button>
-            </td>
-          </tr>
-        `).join('');
+        // Render Desktop Table
+        if (tbody) {
+          tbody.innerHTML = history.map(h => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-2.5 px-3 font-medium">${h.date}</td>
+              <td class="py-2.5 px-3 font-semibold text-slate-800">${h.jobName || '-'}</td>
+              <td class="py-2.5 px-3 text-slate-500">${h.location || '-'}</td>
+              <td class="py-2.5 px-3">${h.requester || '-'}</td>
+              <td class="py-2.5 px-3">
+                <span class="font-mono text-emerald-700">${h.itemId}</span> ${h.itemName}
+              </td>
+              <td class="py-2.5 px-3 text-right font-bold text-slate-800">${h.quantity}</td>
+              <td class="py-2.5 px-3 text-center">
+                ${h.jobImage ? `<a href="${h.jobImage}" target="_blank" class="inline-flex items-center text-emerald-600 hover:text-emerald-800"><i class="fa-regular fa-image text-sm"></i></a>` : '-'}
+              </td>
+              <td class="py-2.5 px-3">
+                <span class="bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded text-[11px]">${h.status || 'สำเร็จ'}</span>
+              </td>
+              <td class="py-2.5 px-3 text-center space-x-1 whitespace-nowrap">
+                <button onclick="requestEditHistory('${h.disbId}')" title="แก้ไขรายการนี้ (รหัสผ่าน 1234)" class="px-2 py-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded text-xs font-semibold transition">
+                  <i class="fa-solid fa-pen-to-square mr-0.5"></i> แก้ไข
+                </button>
+                <button onclick="requestDeleteHistory('${h.disbId}')" title="ลบรายการนี้ (รหัสผ่าน 1234)" class="px-2 py-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded text-xs font-semibold transition">
+                  <i class="fa-solid fa-trash-can mr-0.5"></i> ลบ
+                </button>
+              </td>
+            </tr>
+          `).join('');
+        }
+
+        // Render Mobile Cards (แสดงชัดเจนบนหน้าจอมือถือ ไม่ต้องเลื่อนขวา)
+        if (mobileList) {
+          mobileList.innerHTML = history.map(h => `
+            <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
+              <div class="flex items-center justify-between text-xs pb-2 border-b border-slate-100">
+                <span class="font-bold text-slate-700 flex items-center">
+                  <i class="fa-regular fa-calendar-days text-emerald-600 mr-1.5"></i> ${h.date}
+                </span>
+                <span class="bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded text-[11px] border border-emerald-200/50">
+                  ${h.status || 'สำเร็จ'}
+                </span>
+              </div>
+
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex-1 min-w-0">
+                  <span class="font-mono text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">${h.itemId}</span>
+                  <h4 class="font-bold text-sm text-slate-800 mt-1 truncate">${h.itemName}</h4>
+                  <p class="text-xs text-slate-500 mt-0.5"><i class="fa-solid fa-briefcase text-slate-400 mr-1"></i>${h.jobName || '-'}</p>
+                  <p class="text-xs text-slate-500"><i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${h.location || '-'}</p>
+                  <p class="text-xs text-slate-500"><i class="fa-solid fa-user text-slate-400 mr-1"></i>ผู้เบิก: ${h.requester || '-'}</p>
+                </div>
+                <div class="text-right flex-shrink-0">
+                  <span class="text-[11px] text-slate-400 block">จำนวนเบิก</span>
+                  <span class="text-lg font-black text-emerald-700">${h.quantity}</span>
+                </div>
+              </div>
+
+              ${h.jobImage ? `
+                <div class="pt-1">
+                  <a href="${h.jobImage}" target="_blank" class="inline-flex items-center text-xs text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-2 py-1 rounded">
+                    <i class="fa-regular fa-image mr-1"></i> ดูรูปงานที่แนบ
+                  </a>
+                </div>
+              ` : ''}
+
+              <!-- Action Buttons for Mobile -->
+              <div class="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2">
+                <button onclick="requestEditHistory('${h.disbId}')" class="py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 transition">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                  <span>แก้ไข (1234)</span>
+                </button>
+                <button onclick="requestDeleteHistory('${h.disbId}')" class="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 transition">
+                  <i class="fa-solid fa-trash-can"></i>
+                  <span>ลบ (1234)</span>
+                </button>
+              </div>
+            </div>
+          `).join('');
+        }
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-red-500">โหลดประวัติล้มเหลว: ${err.message}</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-red-500">โหลดประวัติล้มเหลว: ${err.message}</td></tr>`;
+        if (mobileList) mobileList.innerHTML = `<p class="text-center py-6 text-red-500 text-xs">โหลดประวัติล้มเหลว: ${err.message}</p>`;
       }
     }
 
