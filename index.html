@@ -1295,11 +1295,6 @@
         tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-red-500">โหลดประวัติล้มเหลว: ${err.message}</td></tr>`;
       }
     }
-        .withFailureHandler(err => {
-          tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-red-500">โหลดประวัติล้มเหลว: ${err.message}</td></tr>`;
-        })
-        .getRequisitionHistory(50);
-    }
 
     // Utilities: Preview Image on file select
     function previewUploadImage(input, previewId) {
